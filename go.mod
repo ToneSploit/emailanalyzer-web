@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	github.com/labstack/echo/v4 v4.13.3
-	github.com/tonesploit/emailanalyzer v0.0.0
+	github.com/tonesploit/emailanalyzer v0.1.0
 )
 
 require (
@@ -19,5 +19,3 @@ require (
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
 )
-
-replace github.com/tonesploit/emailanalyzer => ../emailanalyzer
