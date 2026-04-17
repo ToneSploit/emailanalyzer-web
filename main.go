@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"embed"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -18,6 +19,9 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/tonesploit/emailanalyzer"
 )
+
+//go:embed templates/*.html
+var templateFS embed.FS
 
 const (
 	maxBodySize = 25 << 20 // 25 MB
@@ -104,7 +108,7 @@ func main() {
 			return `<span class="flag-no">no</span>`
 		},
 		"inc": func(i int) int { return i + 1 },
-	}).ParseGlob("templates/*.html"))
+	}).ParseFS(templateFS, "templates/*.html"))
 
 	e.GET("/", func(c echo.Context) error {
 		return tmpl.ExecuteTemplate(c.Response(), "index.html", nil)
