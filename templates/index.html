@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Email Analyzer</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    main { max-width: 640px; margin: 4rem auto; }
+    h1 { margin-bottom: 0.25rem; }
+    .subtitle { color: var(--pico-muted-color); margin-bottom: 2rem; font-size: 0.95rem; }
+    .note { font-size: 0.85rem; color: var(--pico-muted-color); margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Email Analyzer</h1>
+    <p class="subtitle">SOC-grade header and authentication analysis for .eml files.</p>
+    <form method="post" action="/analyze" enctype="multipart/form-data">
+      <label for="email">
+        Upload email file
+        <input type="file" id="email" name="email" accept=".eml,.msg,.txt" required>
+      </label>
+      <p class="note">Accepted formats: .eml, .msg, .txt &mdash; max 25 MB. Files are held in memory for 30 minutes.</p>
+      <button type="submit">Analyze</button>
+    </form>
+  </main>
+</body>
+</html>

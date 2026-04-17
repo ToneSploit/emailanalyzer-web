@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analysis &mdash; {{.Headers.Subject}}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    body { padding: 1rem; }
+    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+    .subtitle { color: var(--pico-muted-color); font-size: 0.85rem; margin-bottom: 1.5rem; }
+    h2 { font-size: 1.1rem; margin-top: 2rem; border-bottom: 1px solid var(--pico-muted-border-color); padding-bottom: 0.3rem; }
+    table { font-size: 0.88rem; }
+    td:first-child { white-space: nowrap; font-weight: 600; width: 200px; }
+    .badge { display: inline-block; padding: 0.1em 0.55em; border-radius: 4px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; }
+    .pass  { background: #1a472a; color: #6fcf97; }
+    .fail  { background: #4a1111; color: #eb5757; }
+    .soft  { background: #3d2b00; color: #f2c94c; }
+    .none  { background: #222; color: #888; }
+    .flag-yes { color: #eb5757; font-weight: 700; }
+    .flag-no  { color: #888; }
+    .downloads { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; }
+    .downloads a { font-size: 0.85rem; }
+    pre { font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; }
+    .hop-delay { color: var(--pico-muted-color); font-size: 0.8rem; }
+    blockquote { border-left: 3px solid #eb5757; background: #1a1010; padding: 0.6rem 1rem; font-size: 0.85rem; margin: 0.4rem 0; }
+    .url-list { font-size: 0.82rem; word-break: break-all; }
+    .back { font-size: 0.85rem; margin-bottom: 1rem; display: inline-block; }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <a class="back" href="/">&larr; Analyze another</a>
+
+    <h1>{{.Headers.Subject}}</h1>
+    <p class="subtitle">Analyzed {{.Metadata.AnalyzedAt}} &bull; {{.Metadata.SourceFile}} &bull; {{.Metadata.FileSize}} bytes</p>
+
+    <div class="downloads">
+      <a href="download/json" role="button" class="outline">Download JSON</a>
+      <a href="download/md"   role="button" class="outline">Download Markdown</a>
+    </div>
+
+    <!-- Envelope -->
+    <h2>Envelope</h2>
+    <figure><table>
+      <tbody>
+        <tr><td>From</td><td>{{.Headers.From}}</td></tr>
+        {{range .Headers.To}}<tr><td>To</td><td>{{.}}</td></tr>{{end}}
+        {{range .Headers.CC}}<tr><td>CC</td><td>{{.}}</td></tr>{{end}}
+        {{if .Headers.ReplyTo}}<tr><td>Reply-To</td><td>{{.Headers.ReplyTo}}</td></tr>{{end}}
+        <tr><td>Date</td><td>{{.Headers.Date}}</td></tr>
+        <tr><td>Message-ID</td><td><code>{{.Headers.MessageID}}</code></td></tr>
+        {{if .Authentication.ReturnPath}}<tr><td>Return-Path</td><td>{{.Authentication.ReturnPath}}</td></tr>{{end}}
+      </tbody>
+    </table></figure>
+
+    <!-- Sender -->
+    {{if or .Routing.SenderIP .Routing.SenderHostname .Headers.XMailer .Headers.UserAgent}}
+    <h2>Sender &amp; Client</h2>
+    <figure><table><tbody>
+      {{if .Routing.SenderIP}}<tr><td>Sender IP</td><td><code>{{.Routing.SenderIP}}</code></td></tr>{{end}}
+      {{if .Routing.SenderHostname}}<tr><td>Sender hostname</td><td><code>{{.Routing.SenderHostname}}</code></td></tr>{{end}}
+      {{if .Headers.XMailer}}<tr><td>X-Mailer</td><td>{{.Headers.XMailer}}</td></tr>{{end}}
+      {{if .Headers.UserAgent}}<tr><td>User-Agent</td><td>{{.Headers.UserAgent}}</td></tr>{{end}}
+    </tbody></table></figure>
+    {{end}}
+
+    <!-- Authentication -->
+    <h2>Authentication</h2>
+    <figure><table>
+      <thead><tr><th>Check</th><th>Result</th><th>Details</th></tr></thead>
+      <tbody>
+        <tr><td>SPF</td><td>{{authbadge .Authentication.SPF.Result}}</td><td>{{.Authentication.SPF.Details}}</td></tr>
+        <tr><td>DKIM</td><td>{{authbadge .Authentication.DKIM.Result}}</td><td>{{.Authentication.DKIM.Details}}</td></tr>
+        <tr><td>DMARC</td><td>{{authbadge .Authentication.DMARC.Result}}</td><td>{{.Authentication.DMARC.Details}}</td></tr>
+        {{if and .Authentication.ARC.Result (ne .Authentication.ARC.Result "none")}}
+        <tr><td>ARC</td><td>{{authbadge .Authentication.ARC.Result}}</td><td>{{.Authentication.ARC.Details}}</td></tr>
+        {{end}}
+        <tr><td>From / Return-Path</td><td>{{if .Authentication.SenderMatch}}<span class="badge pass">MATCH</span>{{else}}<span class="badge fail">MISMATCH</span>{{end}}</td><td></td></tr>
+      </tbody>
+    </table></figure>
+
+    <h3>DNS Records (live)</h3>
+    {{template "dns" .Authentication.DNS.SPF}}
+    {{template "dns" .Authentication.DNS.DKIM}}
+    {{template "dns" .Authentication.DNS.DMARC}}
+
+    <!-- Routing -->
+    <h2>Mail Routing Path</h2>
+    <figure><table>
+      <thead><tr><th>#</th><th>From</th><th>By</th><th>Protocol</th><th>Timestamp (UTC)</th><th>Delay</th></tr></thead>
+      <tbody>
+        {{range .Routing.Hops}}
+        <tr>
+          <td>{{.Step}}</td>
+          <td>{{.From}}{{if .IP}} <code>[{{.IP}}]</code>{{else if .IPv6}} <code>[IPv6:{{.IPv6}}]</code>{{end}}</td>
+          <td><code>{{.By}}</code></td>
+          <td>{{.With}}</td>
+          <td>{{.Timestamp | parsedate}}</td>
+          <td class="hop-delay">{{if gt .DelayMillis 0}}{{.DelayMillis | fmtdur}}{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table></figure>
+    {{if gt .Routing.TotalDelayMS 0}}
+    <p><strong>Total transit time:</strong> {{.Routing.TotalDelayMS | fmtdur}}</p>
+    {{end}}
+
+    <!-- Attachments -->
+    {{if .Attachments}}
+    <h2>Attachments</h2>
+    <figure><table>
+      <thead><tr><th>#</th><th>Filename</th><th>Type</th><th>Size</th><th>SHA256</th></tr></thead>
+      <tbody>
+        {{range $i, $a := .Attachments}}
+        <tr>
+          <td>{{inc $i}}</td>
+          <td>{{$a.Filename}}</td>
+          <td>{{$a.ContentType}}</td>
+          <td>{{$a.SizeBytes}} B</td>
+          <td><code style="font-size:0.72rem">{{$a.SHA256}}</code></td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table></figure>
+    {{end}}
+
+    <!-- URLs -->
+    {{if .URLs}}
+    <h2>URLs in Body</h2>
+    <ul class="url-list">
+      {{range .URLs}}<li><code>{{.}}</code></li>{{end}}
+    </ul>
+    {{end}}
+
+    <!-- Security -->
+    <h2>Security Indicators</h2>
+    <figure><table>
+      <thead><tr><th>Indicator</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>SPF failed</td><td>{{boolflag .SecurityIndicators.SPFFailed}}</td></tr>
+        <tr><td>DKIM failed</td><td>{{boolflag .SecurityIndicators.DKIMFailed}}</td></tr>
+        <tr><td>DMARC failed</td><td>{{boolflag .SecurityIndicators.DMARCFailed}}</td></tr>
+        <tr><td>From / Reply-To domain mismatch</td><td>{{boolflag .SecurityIndicators.FromReplyToMismatch}}</td></tr>
+        <tr><td>From / Return-Path domain mismatch</td><td>{{boolflag .SecurityIndicators.FromReturnPathMismatch}}</td></tr>
+        <tr><td>Unicode spoofing in From</td><td>{{boolflag .SecurityIndicators.UnicodeSpoofing}}</td></tr>
+        <tr><td>Encoded subject</td><td>{{boolflag .SecurityIndicators.EncodedSubject}}</td></tr>
+        <tr><td>URLs in body</td><td>{{.SecurityIndicators.URLCount}}</td></tr>
+      </tbody>
+    </table></figure>
+
+    {{if .SecurityIndicators.UniqueDomainsInURLs}}
+    <h3>Unique Domains in URLs</h3>
+    <ul class="url-list">{{range .SecurityIndicators.UniqueDomainsInURLs}}<li><code>{{.}}</code></li>{{end}}</ul>
+    {{end}}
+
+    {{if .SecurityIndicators.Notes}}
+    <h3>Analyst Notes</h3>
+    {{range .SecurityIndicators.Notes}}<blockquote>{{.}}</blockquote>{{end}}
+    {{end}}
+
+    {{if .SecurityIndicators.SuspiciousHeaders}}
+    <h3>Suspicious Headers</h3>
+    <ul>{{range .SecurityIndicators.SuspiciousHeaders}}<li>{{.}}</li>{{end}}</ul>
+    {{end}}
+
+    <hr>
+    <p style="font-size:0.78rem;color:var(--pico-muted-color)">Generated by emailanalyzer &bull; {{.Metadata.AnalyzedAt}}</p>
+  </main>
+</body>
+</html>
+
+{{define "dns"}}
+<details>
+  <summary><code>{{.Query}}</code></summary>
+  {{if .Error}}
+  <p style="color:#eb5757;font-size:0.85rem">{{.Error}}</p>
+  {{else}}
+  {{range .Records}}<pre>{{.}}</pre>{{end}}
+  {{if not .Records}}<p style="color:var(--pico-muted-color);font-size:0.85rem">No record found</p>{{end}}
+  {{end}}
+</details>
+{{end}}
