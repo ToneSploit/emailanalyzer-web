@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"embed"
 	"encoding/base64"
-	"encoding/json"
-	"fmt"
 	"html/template"
 	"net/http"
 	"os"
@@ -30,9 +28,6 @@ const (
 
 type entry struct {
 	result    *emailanalyzer.Result
-	markdown  string
-	jsonBytes []byte
-	filename  string
 	expiresAt time.Time
 }
 
@@ -138,16 +133,10 @@ func main() {
 			return c.String(http.StatusBadRequest, "could not parse email: "+err.Error())
 		}
 
-		md := emailanalyzer.ToMarkdown(result)
-		jb, _ := json.MarshalIndent(result, "", "  ")
-
 		id := result.Metadata.FileHash[:32]
 		storeMu.Lock()
 		store[id] = &entry{
 			result:    result,
-			markdown:  md,
-			jsonBytes: jb,
-			filename:  sanitize(fh.Filename),
 			expiresAt: time.Now().Add(resultTTL),
 		}
 		storeMu.Unlock()
@@ -169,23 +158,6 @@ func main() {
 		return c.HTMLBlob(http.StatusOK, buf.Bytes())
 	})
 
-	e.GET("/result/:id/download/json", func(c echo.Context) error {
-		ent, ok := getEntry(c.Param("id"))
-		if !ok {
-			return c.String(http.StatusNotFound, "not found")
-		}
-		c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.json"`, stem(ent.filename)))
-		return c.Blob(http.StatusOK, "application/json", ent.jsonBytes)
-	})
-
-	e.GET("/result/:id/download/md", func(c echo.Context) error {
-		ent, ok := getEntry(c.Param("id"))
-		if !ok {
-			return c.String(http.StatusNotFound, "not found")
-		}
-		c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.md"`, stem(ent.filename)))
-		return c.Blob(http.StatusOK, "text/markdown; charset=utf-8", []byte(ent.markdown))
-	})
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -205,9 +177,6 @@ func sanitize(name string) string {
 	return name
 }
 
-func stem(name string) string {
-	return strings.TrimSuffix(name, filepath.Ext(name))
-}
 
 var reID = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
